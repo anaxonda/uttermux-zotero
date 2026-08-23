@@ -8,6 +8,31 @@ sentences while the current sentence plays.
 The add-on does not contain a TTS runtime or credentials. It requires UtterMux
 Linux with bridge protocol schema 1 and currently supports Zotero 9.0.x.
 
+## Why use the add-on?
+
+UtterMux voices also work through Zotero's ordinary system-voice interface via
+Speech Dispatcher. That route requires no Zotero add-on, but Zotero submits
+local `SpeechSynthesis` utterances one sentence at a time and requests the next
+sentence only after the current one ends. Model or network startup time can
+therefore become an audible gap between sentences.
+
+This add-on uses Zotero's remote-audio path instead. Zotero can request up to
+two sentences concurrently and keep a three-sentence lookahead window, allowing
+UtterMux to synthesize upcoming audio while the current sentence plays. It also:
+
+- preserves Zotero's sentence highlighting and Read Aloud transport controls;
+- respects UtterMux system-voice exposure settings, including favorites-only;
+- lets Zotero privately cache local synthesis while preventing cloud audio from
+  being cached; and
+- applies the same UtterMux voice, language-routing, and provider configuration
+  used by other clients.
+
+Use the ordinary system-voice route when synthesis is already fast enough or
+when add-on-free compatibility across Zotero versions matters more than
+lookahead. Use this add-on when sentence-boundary latency disrupts continuous
+reading. The add-on patches a private Zotero API, so its declared Zotero version
+range is intentionally narrow.
+
 ## Install
 
 1. Install or update UtterMux Linux.
