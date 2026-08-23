@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+xpi=$(realpath -- "$1")
+output=${2:-$xpi.sha256}
+(cd -- "$(dirname -- "$xpi")" && sha256sum "$(basename -- "$xpi")") > "$output"

@@ -22,7 +22,7 @@ jobs:
             --xpi "$xpi" \
             --url "https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/$(basename "$xpi")" \
             --output dist/updates.json
-          sha256sum "$xpi" > "$xpi.sha256"
+          scripts/checksum-xpi "$xpi"
           node tests/test_zotero_extension.mjs
           python -m unittest discover -s tests -p 'test_*.py'
       - name: Publish

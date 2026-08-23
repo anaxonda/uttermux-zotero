@@ -25,6 +25,10 @@ class ReleaseTests(unittest.TestCase):
             update = json.loads(output.read_text())["addons"][manifest["applications"]["zotero"]["id"]]["updates"][0]
         self.assertEqual(update["version"], manifest["version"])
         self.assertEqual(update["update_hash"], "sha256:" + hashlib.sha256(xpi.read_bytes()).hexdigest())
+        subprocess.run([ROOT / "scripts/checksum-xpi", xpi], check=True)
+        checksum_line = Path(f"{xpi}.sha256").read_text()
+        self.assertEqual(checksum_line,
+                         f"{hashlib.sha256(xpi.read_bytes()).hexdigest()}  {xpi.name}\n")
 
 
 if __name__ == "__main__":
