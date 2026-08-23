@@ -1,0 +1,16 @@
+{
+  "manifest_version": 2,
+  "name": "UtterMux for Zotero",
+  "version": "0.1.1",
+  "description": "Use UtterMux voices with Zotero Read Aloud prefetch and highlighting.",
+  "author": "UtterMux contributors",
+  "homepage_url": "https://github.com/anaxonda/uttermux-linux",
+  "applications": {
+    "zotero": {
+      "id": "uttermux-zotero@anaxonda.local",
+      "update_url": "https://github.com/anaxonda/uttermux-zotero/releases/latest/download/updates.json",
+      "strict_min_version": "9.0",
+      "strict_max_version": "9.0.*"
+    }
+  }
+}

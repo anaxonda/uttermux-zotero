@@ -1,0 +1,4 @@
+/dist/
+*.xpi
+__pycache__/
+*.pyc

@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+version=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$root/manifest.json")
+output="$root/dist/uttermux-zotero-$version.xpi"
+stage=$(mktemp -d "${TMPDIR:-/tmp}/uttermux-zotero.XXXXXX")
+trap 'rm -rf "$stage"' EXIT HUP INT TERM
+mkdir -p "$root/dist"
+cp "$root/manifest.json" "$root/bootstrap.js" "$root/LICENSE" "$stage/"
+rm -f "$output"
+(cd "$stage" && zip -q -X "$output" manifest.json bootstrap.js LICENSE)
+printf '%s\n' "$output"
