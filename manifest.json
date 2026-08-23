@@ -4,7 +4,7 @@
   "version": "0.1.1",
   "description": "Use UtterMux voices with Zotero Read Aloud prefetch and highlighting.",
   "author": "UtterMux contributors",
-  "homepage_url": "https://github.com/anaxonda/uttermux-linux",
+  "homepage_url": "https://github.com/anaxonda/uttermux-zotero",
   "applications": {
     "zotero": {
       "id": "uttermux-zotero@anaxonda.local",

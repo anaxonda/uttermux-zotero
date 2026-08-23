@@ -16,6 +16,8 @@ class ReleaseTests(unittest.TestCase):
         with zipfile.ZipFile(xpi) as archive:
             self.assertEqual(set(archive.namelist()), {"manifest.json", "bootstrap.js", "LICENSE"})
             manifest = json.loads(archive.read("manifest.json"))
+        self.assertEqual(manifest["homepage_url"], "https://github.com/anaxonda/uttermux-zotero")
+        self.assertIn("anaxonda/uttermux-zotero", manifest["applications"]["zotero"]["update_url"])
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "updates.json"
             subprocess.run([ROOT / "scripts/zotero-update-manifest.py", "--xpi", xpi,
