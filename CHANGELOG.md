@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0 - 2026-09-03
+
+- Added Zotero 10.0.x compatibility while retaining Zotero 9.0.x support.
+- Made API patching idempotent and safe around other method wrappers.
+- Revalidate the bridge contract after service or transport failures.
+- Added an installed-Zotero Read Aloud contract checker.
+
 ## 0.1.1 - 2026-08-22
 
 - Added stable voice identifiers across favorite and catalog reordering.

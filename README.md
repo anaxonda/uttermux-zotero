@@ -6,7 +6,7 @@ uses Zotero's remote-audio controller so UtterMux can synthesize upcoming
 sentences while the current sentence plays.
 
 The add-on does not contain a TTS runtime or credentials. It requires UtterMux
-Linux with bridge protocol schema 1 and currently supports Zotero 9.0.x.
+Linux with bridge protocol schema 1 and supports Zotero 9.0.x and 10.0.x.
 
 ## Why use the add-on?
 
@@ -67,9 +67,10 @@ uttermuxd
 ```
 
 The add-on patches Zotero's private `getReadAloudVoices()` and
-`getReadAloudAudio()` methods without modifying Zotero's installation. This API
-is version-sensitive, so each Zotero major release is tested before the
-manifest compatibility range is raised.
+`getReadAloudAudio()` methods without modifying Zotero's installation. Startup
+also verifies that both methods exist. This API is version-sensitive, so each
+Zotero major release is tested before the manifest compatibility range is
+raised. The 0.2 series is contract-tested against Zotero 9.0.x and 10.0.1.
 
 Local audio may be stored in Zotero's Read Aloud cache. Online-provider audio
 is marked `no-store`. Document text, tokens, and provider credentials are not
@@ -82,9 +83,13 @@ See [PROTOCOL.md](PROTOCOL.md) for the bridge contract and
 
 ```sh
 node tests/test_zotero_extension.mjs
+scripts/check-zotero-contract /usr/lib/zotero
 scripts/build-xpi
 unzip -t dist/uttermux-zotero-*.xpi
 ```
+
+`check-zotero-contract` reads Zotero's version metadata and application archive;
+it does not modify the Zotero installation or profile.
 
 The add-on is GPL-3.0-or-later. Relevant upstream references include Zotero
 Reader's [remote controller](https://github.com/zotero/reader/blob/master/src/common/read-aloud/remote/controller.ts),
