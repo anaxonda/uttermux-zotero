@@ -3,14 +3,12 @@
 "use strict";
 
 const NAME = "UtterMux for Zotero";
-const SUPPORTED_VERSION = /^9\.0\./;
+const SUPPORTED_VERSIONS = new Set(["9.0", "10.0"]);
+const PATCH_KEY = Symbol.for("uttermux-zotero.patch.v1");
 const BRIDGE = "http://127.0.0.1:8766";
 const SAMPLE = "UtterMux is ready to read this document with the selected voice.";
 
-let originalVoices;
-let originalAudio;
-let patchedVoices;
-let patchedAudio;
+let patchState;
 let voiceMap = new Map();
 let lastNotice = 0;
 let bridgeValidated = false;
@@ -35,15 +33,27 @@ async function token() {
 
 async function bridgeRequest(method, path, options = {}) {
   const authorization = await token();
-  return Zotero.HTTP.request(method, `${BRIDGE}${path}`, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${authorization}`,
-      ...(options.headers || {}),
-    },
-    successCodes: [200],
-    errorDelayMax: 500,
-  });
+  try {
+    return await Zotero.HTTP.request(method, `${BRIDGE}${path}`, {
+      ...options,
+      headers: {
+        Authorization: `Bearer ${authorization}`,
+        ...(options.headers || {}),
+      },
+      successCodes: [200],
+      errorDelayMax: 500,
+    });
+  }
+  catch (error) {
+    // Recheck the bridge schema after a service restart or transport failure.
+    bridgeValidated = false;
+    throw error;
+  }
+}
+
+function supportedVersion(version) {
+  const match = /^(\d+)\.(\d+)/.exec(String(version));
+  return Boolean(match && SUPPORTED_VERSIONS.has(`${match[1]}.${match[2]}`));
 }
 
 function opaqueID(record) {
@@ -60,14 +70,14 @@ function opaqueID(record) {
 function buildVoiceResponse(records, cacheVersion = 1) {
   const labels = {};
   const locales = {};
-  records.forEach((record) => {
+  records.forEach((record, index) => {
     const id = opaqueID(record);
     const existing = voiceMap.get(id);
     if (existing && existing.id !== record.id) {
       throw new Error(`UtterMux voice identifier collision for ${record.id}`);
     }
     voiceMap.set(id, record);
-    labels[id] = { label: record.name };
+    labels[id] = { label: record.name, default: index === 0 };
     const declared = [record.language || "en-US", ...(record.languages || [])];
     for (const locale of [...new Set(declared.filter(Boolean))]) {
       if (!locales[locale]) locales[locale] = { default: [], other: [] };
@@ -108,6 +118,7 @@ async function localVoiceResponse() {
 }
 
 async function mergedVoices(client) {
+  const state = patchState;
   let local;
   try {
     local = await localVoiceResponse();
@@ -117,7 +128,7 @@ async function mergedVoices(client) {
       premiumCreditsRemaining: null, devMode: false };
   }
   try {
-    const upstream = await originalVoices.call(client);
+    const upstream = await state.baseVoices.call(client);
     if (upstream?.error || !upstream?.voices) return local;
     return {
       ...upstream,
@@ -157,8 +168,9 @@ function responseForAudio(response) {
 }
 
 async function getAudio(segment, voiceID) {
+  const state = patchState;
   const voice = voiceMap.get(voiceID);
-  if (!voice) return originalAudio.call(this, segment, voiceID);
+  if (!voice) return state.baseAudio.call(this, segment, voiceID);
   const input = segment === "sample" ? SAMPLE : segment?.text;
   if (!input || typeof input !== "string") return { error: "unknown" };
   try {
@@ -176,28 +188,60 @@ async function getAudio(segment, voiceID) {
 
 async function startup() {
   await Zotero.initializationPromise;
-  if (!SUPPORTED_VERSION.test(Zotero.version)) {
-    throw new Error(`${NAME} supports Zotero 9.0.x; found ${Zotero.version}`);
+  if (!supportedVersion(Zotero.version)) {
+    throw new Error(`${NAME} supports Zotero 9.0.x and 10.0.x; found ${Zotero.version}`);
   }
   const prototype = Zotero.Sync?.APIClient?.prototype;
   if (!prototype || typeof prototype.getReadAloudVoices !== "function"
       || typeof prototype.getReadAloudAudio !== "function") {
     throw new Error(`${NAME}: Zotero Read Aloud API contract is unavailable`);
   }
-  originalVoices = prototype.getReadAloudVoices;
-  originalAudio = prototype.getReadAloudAudio;
-  patchedVoices = async function () { return mergedVoices(this); };
-  patchedAudio = getAudio;
-  prototype.getReadAloudVoices = patchedVoices;
-  prototype.getReadAloudAudio = patchedAudio;
+  let state = prototype[PATCH_KEY];
+  if (!state) {
+    state = {
+      baseVoices: prototype.getReadAloudVoices,
+      baseAudio: prototype.getReadAloudAudio,
+      enabled: false,
+      mergeVoices: null,
+      getAudio: null,
+    };
+    state.voicesWrapper = async function (...args) {
+      if (state.enabled && state.mergeVoices) return state.mergeVoices(this);
+      return state.baseVoices.apply(this, args);
+    };
+    state.audioWrapper = async function (...args) {
+      if (state.enabled && state.getAudio) return state.getAudio.apply(this, args);
+      return state.baseAudio.apply(this, args);
+    };
+    Object.defineProperty(prototype, PATCH_KEY, { value: state, configurable: true });
+    prototype.getReadAloudVoices = state.voicesWrapper;
+    prototype.getReadAloudAudio = state.audioWrapper;
+  }
+  state.mergeVoices = mergedVoices;
+  state.getAudio = getAudio;
+  state.enabled = true;
+  patchState = state;
   log(`enabled for Zotero ${Zotero.version}`);
 }
 
 function shutdown() {
   const prototype = Zotero.Sync?.APIClient?.prototype;
-  if (!prototype) return;
-  if (prototype.getReadAloudVoices === patchedVoices) prototype.getReadAloudVoices = originalVoices;
-  if (prototype.getReadAloudAudio === patchedAudio) prototype.getReadAloudAudio = originalAudio;
+  const state = patchState || prototype?.[PATCH_KEY];
+  if (!prototype || !state) return;
+  state.enabled = false;
+  state.mergeVoices = null;
+  state.getAudio = null;
+  if (prototype.getReadAloudVoices === state.voicesWrapper) {
+    prototype.getReadAloudVoices = state.baseVoices;
+  }
+  if (prototype.getReadAloudAudio === state.audioWrapper) {
+    prototype.getReadAloudAudio = state.baseAudio;
+  }
+  if (prototype.getReadAloudVoices === state.baseVoices
+      && prototype.getReadAloudAudio === state.baseAudio) {
+    delete prototype[PATCH_KEY];
+  }
+  patchState = null;
   voiceMap.clear();
   bridgeValidated = false;
   log("disabled and restored Zotero methods");
