@@ -1,0 +1,71 @@
+#!/usr/bin/env python3
+"""Check an installed Zotero Read Aloud contract without modifying Zotero."""
+
+import argparse
+import configparser
+import json
+from pathlib import Path
+import re
+import sys
+import zipfile
+
+
+SUPPORTED = {(9, 0), (10, 0)}
+API_PATH = "chrome/content/zotero/xpcom/sync/syncAPIClient.js"
+READER_PATH = "chrome/content/zotero/xpcom/reader.js"
+
+
+def inspect(root: Path) -> dict:
+    application = root / "app" / "application.ini"
+    archive = root / "app" / "omni.ja"
+    parser = configparser.ConfigParser()
+    if not parser.read(application):
+        raise RuntimeError(f"Zotero version metadata not found: {application}")
+    version = parser.get("App", "Version", fallback="")
+    match = re.match(r"^(\d+)\.(\d+)", version)
+    supported_version = bool(match and (int(match[1]), int(match[2])) in SUPPORTED)
+    try:
+        with zipfile.ZipFile(archive) as package:
+            api = package.read(API_PATH).decode("utf-8")
+            reader = package.read(READER_PATH).decode("utf-8")
+    except (OSError, KeyError, zipfile.BadZipFile) as error:
+        raise RuntimeError(f"Cannot inspect Zotero application archive {archive}: {error}") from error
+    checks = {
+        "getReadAloudVoices": bool(re.search(r"\b(?:async\s+)?getReadAloudVoices\s*\(", api)),
+        "getReadAloudAudio": bool(re.search(r"\b(?:async\s+)?getReadAloudAudio\s*\(", api)),
+        "remoteInterface": "_getReadAloudRemoteInterface" in reader,
+        "voiceDispatch": ".getReadAloudVoices(" in reader,
+        "audioDispatch": ".getReadAloudAudio(" in reader,
+    }
+    return {
+        "version": version,
+        "root": str(root),
+        "supportedVersion": supported_version,
+        "checks": checks,
+        "compatible": supported_version and all(checks.values()),
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("root", nargs="?", default="/usr/lib/zotero",
+                        help="Zotero installation root (default: /usr/lib/zotero)")
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args()
+    try:
+        result = inspect(Path(args.root))
+    except RuntimeError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+    if args.json:
+        print(json.dumps(result, indent=2))
+    else:
+        state = "compatible" if result["compatible"] else "incompatible"
+        print(f"Zotero {result['version']}: {state}")
+        for name, passed in result["checks"].items():
+            print(f"  {'ok' if passed else 'missing'}  {name}")
+    return 0 if result["compatible"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
